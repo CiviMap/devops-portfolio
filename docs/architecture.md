@@ -200,30 +200,35 @@ flowchart LR
     store --> fresh_response[Return fresh response]
 ```
 
-#### Concurrent cache-miss protection
+#### Concurrent request coalescing
 
 ```mermaid
 flowchart LR
     requests[Concurrent requests for one key] --> miss[Redis cache miss]
-    miss --> lock{Single-flight lock acquired?}
+    miss --> group[Join per-key in-flight group]
 
-    lock -->|Yes: one request| recheck{Value now cached?}
-    recheck -->|Yes| race_response[Return cached response]
-    recheck -->|No| database[(Query PostgreSQL)]
-    database --> populate[Cache result with TTL]
-    populate --> builder_response[Return fresh response]
+    group --> leader[One leader]
+    leader --> resolve[Resolve once from Redis or PostgreSQL]
+    resolve --> complete[Cache fresh value and complete shared result]
 
-    lock -->|No: other requests| wait[Wait briefly with jitter]
-    wait --> retry[Retry Redis]
-    retry --> cached_response[Return cached response]
+    group --> followers[Followers await same result]
+    followers -.->|Await| complete
+    complete --> responses[Return response to the group]
 ```
 
-The lock is scoped to one cache key and expires automatically. The lock winner
-rechecks Redis before querying PostgreSQL because another replica may have filled
-the cache during lock acquisition. Other requests wait for a bounded interval
-with jitter and retry Redis instead of querying the database. If the builder
-fails, the lock expires and another request can take over. Cache TTLs also use
-small random variations so popular keys do not all expire at the same instant.
+The group exists only for one normalized cache key and only while its result is
+being rebuilt. The first request becomes the leader; requests arriving on the
+same API replica join its in-memory future rather than starting another database
+query. Across replicas, a short Redis lease elects one leader and a completion
+notification wakes the followers. The lease is not a turn-by-turn queue.
+
+The leader rechecks Redis, queries PostgreSQL only if the value is still absent,
+caches the result once, and completes the shared operation. Followers await that
+same result with a bounded timeout, then re-read Redis. The cache recheck remains
+necessary because a transient notification can be missed. If the leader fails,
+the lease expires and another request can take over. Cache hits and requests for
+different keys remain fully concurrent. Cache TTLs use small random variations
+so popular keys do not all expire at the same instant.
 
 #### Updates and cache invalidation
 
@@ -295,8 +300,9 @@ Redis is planned as a shared cache for frequently requested public reports,
 map/list queries, reference data, and expensive aggregates. The API will use a
 cache-aside flow: read Redis first, fall back to PostgreSQL on a miss, populate
 the cache with a bounded TTL, and invalidate affected keys only after a database
-write commits successfully. A short single-flight lock will prevent many API
-replicas from rebuilding the same popular key at once.
+write commits successfully. A per-key request-coalescing group will share one
+in-flight rebuild among concurrent callers. A short Redis lease is used only to
+elect the leader across API replicas.
 
 Redis is also planned as shared infrastructure for rate-limit counters and
 cross-replica event delivery. Long-running work such as image processing,
