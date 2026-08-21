@@ -189,45 +189,32 @@ the additional operational cost.
 #### Repeated public reads
 
 ```mermaid
-sequenceDiagram
-    participant user as User
-    participant edge as Cloudflare or browser cache
-    participant api as API replica
-    participant cache as Redis response cache
-    participant database as PostgreSQL and PostGIS
-
-    user->>edge: GET public report
-    alt Edge cache hit
-        edge-->>user: Cached response
-    else Edge cache miss
-        edge->>api: Forward request
-        api->>cache: Read versioned report key
-        alt Redis cache hit
-            cache-->>api: Cached public response
-        else Redis cache miss
-            api->>database: Query report
-            database-->>api: Current public data
-            api->>cache: Store with a bounded TTL
-        end
-        api-->>edge: Public response
-        edge-->>user: Response
-    end
-
-    opt Report, comment, reaction, photo, or status changes
-        user->>api: Write request
-        api->>database: Commit change
-        database-->>api: Commit succeeds
-        api->>cache: Delete affected report and query keys
-        api-->>user: Updated response
-    end
+flowchart LR
+    request[1. Public GET] --> edge[2. Check edge cache]
+    edge --> api[3. API replica]
+    api --> redis[4. Check Redis]
+    redis --> database[(5. PostgreSQL on miss)]
+    database --> store[6. Cache result with TTL]
+    store --> response[7. Return response]
 ```
 
+#### Updates and cache invalidation
+
+```mermaid
+flowchart LR
+    write[Write request] --> api[API replica]
+    api --> commit[(Commit to PostgreSQL)]
+    commit --> invalidate[Invalidate affected cache keys]
+    invalidate --> response[Return updated response]
+```
+
+The read diagram shows the longest path: a request where both caches miss. An
+edge-cache hit returns after step 2, while a Redis hit returns after step 4.
 Only public, permission-independent `GET` responses enter the shared cache.
 Private, authority, admin, and user-specific representations bypass it unless
-their cache keys include the complete authorization scope. A cache miss uses
-PostgreSQL as the source of truth, then stores the public representation with a
-TTL. Successful writes invalidate the individual report plus any affected list,
-map, or statistics keys.
+their cache keys include the complete authorization scope. PostgreSQL remains
+the source of truth. Successful writes invalidate the individual report plus
+any affected list, map, or statistics keys.
 
 #### Shared state and background work
 
