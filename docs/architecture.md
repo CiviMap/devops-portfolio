@@ -200,6 +200,31 @@ flowchart LR
     store --> fresh_response[Return fresh response]
 ```
 
+#### Concurrent cache-miss protection
+
+```mermaid
+flowchart LR
+    requests[Concurrent requests for one key] --> miss[Redis cache miss]
+    miss --> lock{Single-flight lock acquired?}
+
+    lock -->|Yes: one request| recheck{Value now cached?}
+    recheck -->|Yes| race_response[Return cached response]
+    recheck -->|No| database[(Query PostgreSQL)]
+    database --> populate[Cache result with TTL]
+    populate --> builder_response[Return fresh response]
+
+    lock -->|No: other requests| wait[Wait briefly with jitter]
+    wait --> retry[Retry Redis]
+    retry --> cached_response[Return cached response]
+```
+
+The lock is scoped to one cache key and expires automatically. The lock winner
+rechecks Redis before querying PostgreSQL because another replica may have filled
+the cache during lock acquisition. Other requests wait for a bounded interval
+with jitter and retry Redis instead of querying the database. If the builder
+fails, the lock expires and another request can take over. Cache TTLs also use
+small random variations so popular keys do not all expire at the same instant.
+
 #### Updates and cache invalidation
 
 ```mermaid
@@ -260,10 +285,9 @@ flowchart TB
     implementation --> azure[Azure]
 ```
 
-The first diagram shows the application scaling path. The second shows the
-provisioning decision without implying that every deployment creates every
-resource. A composition selects one or more capabilities and one target
-provider; only the selected modules and their prerequisites enter that plan.
+The provisioning diagram does not imply that every deployment creates every
+resource. A composition selects one or more capabilities and one target provider;
+only the selected modules and their prerequisites enter that plan.
 
 ### Redis and background processing
 
