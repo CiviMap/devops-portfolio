@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 240" role="img" aria-labelledby="title description">
+  <title id="title">CiviMap</title>
+  <desc id="description">The centered dark-mode CiviMap map-pin icon and wordmark.</desc>
+  <defs>
+    <clipPath id="lockup-icon-clip">
+      <rect x="10" y="10" width="220" height="220" rx="46" />
+    </clipPath>
+  </defs>
+  <g transform="translate(70 0)">
+  <g clip-path="url(#lockup-icon-clip)">
+    <rect x="10" y="10" width="220" height="220" fill="#f1f0ea" />
+    <path d="M10 10h75l-8 67-67 26z" fill="#dce9df" />
+    <path d="M85 10h78l-12 60-74 7z" fill="#e5e4de" />
+    <path d="M163 10h67v71l-79-11z" fill="#dce9df" />
+    <path d="m10 103 67-26 24 58-91 34z" fill="#e5e4de" />
+    <path d="m77 77 74-7 20 58-70 7z" fill="#dce9df" />
+    <path d="m151 70 79 11v62l-59-15z" fill="#e5e4de" />
+    <path d="m10 169 91-34 23 95H10z" fill="#dce9df" />
+    <path d="m101 135 70-7 17 102h-64z" fill="#e5e4de" />
+    <path d="m171 128 59 15v87h-42z" fill="#dce9df" />
+    <path d="M84 2 73 80l34 158M164 1l-16 72 42 165M1 107l74-32 164 11M1 174l98-43 140 16" fill="none" stroke="#fafaf5" stroke-width="11" />
+  </g>
+  <path d="M120 57c-23 0-40 16-40 38 0 29 31 64 40 74 9-10 40-45 40-74 0-22-17-38-40-38Z" fill="#047857" stroke="#fafaf5" stroke-width="4" stroke-linejoin="round" />
+  <g fill="#fafaf5" aria-hidden="true">
+    <rect x="114.5" y="77" width="11" height="31" rx="5.5" />
+    <circle cx="120" cy="120.5" r="6" />
+  </g>
+  <g transform="translate(270 10)">
+    <text x="0" y="169" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="154" font-weight="700" letter-spacing="-7">
+      <tspan fill="#f0f6f3">Civi</tspan><tspan fill="#047857">Map</tspan>
+    </text>
+  </g>
+  </g>
+</svg>
