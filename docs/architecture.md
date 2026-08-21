@@ -190,12 +190,14 @@ the additional operational cost.
 
 ```mermaid
 flowchart LR
-    request[1. Public GET] --> edge[2. Check edge cache]
-    edge --> api[3. API replica]
-    api --> redis[4. Check Redis]
-    redis --> database[(5. PostgreSQL on miss)]
-    database --> store[6. Cache result with TTL]
-    store --> response[7. Return response]
+    request[Public GET request] --> edge{Edge cache hit?}
+    edge -->|Yes| edge_response[Return edge-cached response]
+    edge -->|No| api[API replica]
+    api --> redis{Redis cache hit?}
+    redis -->|Yes| redis_response[Return Redis response]
+    redis -->|No| database[(PostgreSQL and PostGIS)]
+    database --> store[Cache result with TTL]
+    store --> fresh_response[Return fresh response]
 ```
 
 #### Updates and cache invalidation
@@ -208,9 +210,10 @@ flowchart LR
     invalidate --> response[Return updated response]
 ```
 
-The read diagram shows the longest path: a request where both caches miss. An
-edge-cache hit returns after step 2, while a Redis hit returns after step 4.
-Only public, permission-independent `GET` responses enter the shared cache.
+An edge-cache hit avoids the application entirely. A Redis hit avoids a database
+query. Only a miss at both layers reaches PostgreSQL and populates Redis for the
+next equivalent request. Only public, permission-independent `GET` responses
+enter the shared cache.
 Private, authority, admin, and user-specific representations bypass it unless
 their cache keys include the complete authorization scope. PostgreSQL remains
 the source of truth. Successful writes invalidate the individual report plus
