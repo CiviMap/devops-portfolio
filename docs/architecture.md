@@ -186,16 +186,68 @@ the additional operational cost.
 
 ### Application scaling path
 
+#### Repeated public reads
+
+```mermaid
+sequenceDiagram
+    participant user as User
+    participant edge as Cloudflare or browser cache
+    participant api as API replica
+    participant cache as Redis response cache
+    participant database as PostgreSQL and PostGIS
+
+    user->>edge: GET public report
+    alt Edge cache hit
+        edge-->>user: Cached response
+    else Edge cache miss
+        edge->>api: Forward request
+        api->>cache: Read versioned report key
+        alt Redis cache hit
+            cache-->>api: Cached public response
+        else Redis cache miss
+            api->>database: Query report
+            database-->>api: Current public data
+            api->>cache: Store with a bounded TTL
+        end
+        api-->>edge: Public response
+        edge-->>user: Response
+    end
+
+    opt Report, comment, reaction, photo, or status changes
+        user->>api: Write request
+        api->>database: Commit change
+        database-->>api: Commit succeeds
+        api->>cache: Delete affected report and query keys
+        api-->>user: Updated response
+    end
+```
+
+Only public, permission-independent `GET` responses enter the shared cache.
+Private, authority, admin, and user-specific representations bypass it unless
+their cache keys include the complete authorization scope. A cache miss uses
+PostgreSQL as the source of truth, then stores the public representation with a
+TTL. Successful writes invalidate the individual report plus any affected list,
+map, or statistics keys.
+
+#### Shared state and background work
+
 ```mermaid
 flowchart LR
-    api[Application API] --> database[(PostgreSQL and PostGIS)]
-    api --> redis[(Redis)]
+    api[API replicas] --> shared[(Redis shared state)]
     api --> queue[Durable job queue]
     queue --> workers[Background workers]
+    workers --> database[(PostgreSQL and PostGIS)]
     workers --> object[(Object storage)]
     api -.->|Storage adapter| object
     local[(Current file storage)] -.->|Controlled migration| object
 ```
+
+The shared-state role covers distributed rate-limit counters and cross-replica
+real-time events. The durable queue covers retryable work such as image
+processing, malware scanning, and notification delivery. Cache entries may be
+evicted, while queued work must not disappear, so the response cache and durable
+queue need separate memory, persistence, and eviction policies even if both use
+Redis technology initially.
 
 ### Selective cloud provisioning
 
@@ -225,7 +277,14 @@ provider; only the selected modules and their prerequisites enter that plan.
 
 ### Redis and background processing
 
-Redis is planned first as shared infrastructure for rate-limit counters and
+Redis is planned as a shared cache for frequently requested public reports,
+map/list queries, reference data, and expensive aggregates. The API will use a
+cache-aside flow: read Redis first, fall back to PostgreSQL on a miss, populate
+the cache with a bounded TTL, and invalidate affected keys only after a database
+write commits successfully. A short single-flight lock will prevent many API
+replicas from rebuilding the same popular key at once.
+
+Redis is also planned as shared infrastructure for rate-limit counters and
 cross-replica event delivery. Long-running work such as image processing,
 malware scanning, and notification fan-out will move behind a durable queue.
 The API can then acknowledge accepted work quickly while idempotent workers
