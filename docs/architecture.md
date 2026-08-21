@@ -266,7 +266,7 @@ The delivery pipeline will grow into a layered software-supply-chain check:
 - Terraform, Kubernetes, and container configuration scanning;
 - container image vulnerability scanning and software bills of materials;
 - signed images and build provenance before promotion;
-- dynamic security checks against staging where they can run safely; and
+- dynamic security checks against staging where they can run safely;
 - automated dependency-update or remediation pull requests.
 
 Automatic fixing will remain review-gated. Tools can prepare a version bump or
