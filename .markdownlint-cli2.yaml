@@ -1,0 +1,4 @@
+config:
+  MD013: false # GitHub tables and HTML hero markup can exceed 80 characters.
+  MD033: false # The centered repository hero intentionally uses inline HTML.
+  MD041: false # The hero image intentionally appears before the H1 heading.
